@@ -4,10 +4,12 @@ namespace App\Http\Controllers;
 
 use Github;
 use App\Org;
+use Socialite;
 use App\Traits\CaptchaTrait;
 use Illuminate\Http\Request;
 use App\Http\Requests\JoinOrgRequest;
 use Illuminate\Support\Facades\Artisan;
+use Laravel\Socialite\Two\InvalidStateException;
 
 class JoinController extends Controller
 {
@@ -24,12 +26,27 @@ class JoinController extends Controller
         if ($validation) {
             return $validation;
         }
-        Artisan::call('orgmanager:joinorg', [
-            'org'      => $org->id,
-            'username' => $request->github_username,
-        ]);
 
-        return redirect('join/'.$org->id)->withSuccess(trans('alerts.invite').$request->github_username.trans('alerts.inbox'), trans('alerts.sent'));
+        return Socialite::driver('github')->setScopes([])->redirectUrl(route('join.callback', $org))->redirect();
+    }
+
+    public function callback(Request $request, Org $org)
+    {
+        try {
+            $user = Socialite::driver('github')->user();
+        } catch (InvalidStateException $e) {
+            return redirect('join/'.$org->id)->withErrors('Something went wrong when authenticating with GitHub. Please try again later or open an issue.');
+        }
+        if ($this->isMember($org, $user = $user->getNickname())) {
+            return redirect('join/'.$org->id)->withErrors(trans('alerts.member'));
+        }
+
+        Artisan::call('orgmanager:joinorg', [
+          'org'      => $org->id,
+          'username' => $user,
+      ]);
+
+        return redirect(url("https://github.com/orgs/$org->name/invitation/"));
     }
 
     public function redirect($name)
@@ -63,9 +80,6 @@ class JoinController extends Controller
             if (! password_verify($request->org_password, $org->password)) {
                 return redirect('join/'.$org->id)->withErrors(trans('alerts.passwd2'));
             }
-        }
-        if ($this->isMember($org, $request->github_username)) {
-            return redirect('join/'.$org->id)->withErrors('You are already a member of '.$org->name);
         }
     }
 }

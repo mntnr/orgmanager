@@ -11,7 +11,7 @@ class Org extends Model
     public $incrementing = false;
 
     protected $fillable = [
-      'id', 'name', 'url', 'description', 'avatar',
+      'id', 'name', 'url', 'description', 'avatar', 'custom_message',
     ];
 
     protected $hidden = [
@@ -31,5 +31,10 @@ class Org extends Model
     public function team()
     {
         return $this->belongsTo('App\Team');
+    }
+
+    public function hasPassword()
+    {
+        return $this->password != null && trim($this->password) != '';
     }
 }
